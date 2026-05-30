@@ -1,9 +1,13 @@
 package com.example.pc01movilescardenas23100751palomino23200058
 
+import android.Manifest
+import android.content.pm.PackageManager
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -35,10 +39,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -67,7 +73,7 @@ class MainActivity : ComponentActivity() {
                         PantallaDestino("Catálogo de Destinos", navController)
                     }
                     composable("permiso") {
-                        PantallaDestino("Permiso de Ubicación", navController)
+                        PermisoUbicacionScreen(navController)
                     }
                 }
             }
@@ -294,6 +300,102 @@ fun PresupuestoScreen(navController: NavHostController) {
                 modifier = Modifier.fillMaxWidth(0.6f)
             ) {
                 Text("Regresar al Menú")
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun PermisoUbicacionScreen(navController: NavHostController) {
+    val context = LocalContext.current
+    var estadoPermiso by remember {
+        mutableStateOf(
+            if (ContextCompat.checkSelfPermission(
+                    context,
+                    Manifest.permission.ACCESS_FINE_LOCATION
+                ) == PackageManager.PERMISSION_GRANTED
+            ) {
+                "Permiso concedido"
+            } else {
+                "Permiso pendiente de solicitud"
+            }
+        )
+    }
+
+    val launcher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        val concedido = permissions.getOrDefault(Manifest.permission.ACCESS_FINE_LOCATION, false) ||
+                        permissions.getOrDefault(Manifest.permission.ACCESS_COARSE_LOCATION, false)
+        estadoPermiso = if (concedido) {
+            "Permiso concedido"
+        } else {
+            "Permiso denegado"
+        }
+    }
+
+    Scaffold(
+        topBar = {
+            CenterAlignedTopAppBar(
+                title = { Text("PERMISO DE UBICACIÓN", style = MaterialTheme.typography.headlineSmall) },
+                navigationIcon = {
+                    IconButton(onClick = { navController.popBackStack() }) {
+                        Icon(Icons.Default.ArrowBack, contentDescription = "Regresar")
+                    }
+                }
+            )
+        }
+    ) { innerPadding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+                .padding(24.dp),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = "Estado del Permiso:",
+                style = MaterialTheme.typography.headlineSmall
+            )
+            Text(
+                text = estadoPermiso,
+                style = MaterialTheme.typography.displaySmall,
+                textAlign = TextAlign.Center,
+                color = when (estadoPermiso) {
+                    "Permiso concedido" -> MaterialTheme.colorScheme.primary
+                    "Permiso denegado" -> MaterialTheme.colorScheme.error
+                    else -> MaterialTheme.colorScheme.onSurfaceVariant
+                },
+                modifier = Modifier.padding(vertical = 32.dp)
+            )
+
+            Button(
+                onClick = {
+                    launcher.launch(
+                        arrayOf(
+                            Manifest.permission.ACCESS_FINE_LOCATION,
+                            Manifest.permission.ACCESS_COARSE_LOCATION
+                        )
+                    )
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(90.dp)
+            ) {
+                Text("Solicitar Permiso de Ubicación", style = MaterialTheme.typography.titleLarge)
+            }
+
+            Spacer(modifier = Modifier.height(32.dp))
+
+            Button(
+                onClick = { navController.popBackStack() },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(80.dp)
+            ) {
+                Text("Regresar al Menú", style = MaterialTheme.typography.titleLarge)
             }
         }
     }
