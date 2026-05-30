@@ -70,7 +70,7 @@ class MainActivity : ComponentActivity() {
                         PresupuestoScreen(navController)
                     }
                     composable("catalogo") {
-                        PantallaDestino("Catálogo de Destinos", navController)
+                        DestinationScreen(navController)
                     }
                     composable("permiso") {
                         PermisoUbicacionScreen(navController)
