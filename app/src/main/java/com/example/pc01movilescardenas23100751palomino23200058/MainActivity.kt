@@ -45,7 +45,7 @@ class MainActivity : ComponentActivity() {
                         PantallaDestino("Planificador de Presupuesto", navController)
                     }
                     composable("catalogo") {
-                        PantallaDestino("Catálogo de Destinos", navController)
+                        DestinationScreen(navController)
                     }
                     composable("permiso") {
                         PantallaDestino("Permiso de Ubicación", navController)
