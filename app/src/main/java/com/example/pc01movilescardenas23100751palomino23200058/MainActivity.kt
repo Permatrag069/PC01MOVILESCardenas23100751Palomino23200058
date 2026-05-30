@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.Button
 import androidx.compose.material3.CenterAlignedTopAppBar
@@ -45,6 +46,20 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import com.google.android.gms.location.LocationServices
+import com.google.android.gms.location.Priority
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -70,7 +85,7 @@ class MainActivity : ComponentActivity() {
                         PresupuestoScreen(navController)
                     }
                     composable("catalogo") {
-                        DestinationScreen(navController)
+                        PantallaDestino("Catálogo de Destinos", navController)
                     }
                     composable("permiso") {
                         PermisoUbicacionScreen(navController)
@@ -168,7 +183,7 @@ fun PresupuestoScreen(navController: NavHostController) {
                 title = { Text("PLANIFICADOR DE PRESUPUESTO") },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Regresar")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Regresar")
                     }
                 }
             )
@@ -277,10 +292,10 @@ fun PresupuestoScreen(navController: NavHostController) {
                 )
             }
 
-            totalCalculado?.let { total ->
+            if (totalCalculado != null) {
                 Spacer(modifier = Modifier.height(32.dp))
                 Text(
-                    text = "Presupuesto Total: $" + String.format(Locale.US, "%.2f", total),
+                    text = "Presupuesto Total: $" + String.format(Locale.US, "%.2f", totalCalculado),
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary
@@ -292,15 +307,6 @@ fun PresupuestoScreen(navController: NavHostController) {
                     textAlign = TextAlign.Center
                 )
             }
-            
-            Spacer(modifier = Modifier.height(32.dp))
-            
-            Button(
-                onClick = { navController.popBackStack() },
-                modifier = Modifier.fillMaxWidth(0.6f)
-            ) {
-                Text("Regresar al Menú")
-            }
         }
     }
 }
@@ -309,18 +315,36 @@ fun PresupuestoScreen(navController: NavHostController) {
 @Composable
 fun PermisoUbicacionScreen(navController: NavHostController) {
     val context = LocalContext.current
-    var estadoPermiso by remember {
-        mutableStateOf(
-            if (ContextCompat.checkSelfPermission(
-                    context,
-                    Manifest.permission.ACCESS_FINE_LOCATION
-                ) == PackageManager.PERMISSION_GRANTED
-            ) {
-                "Permiso concedido"
-            } else {
-                "Permiso pendiente de solicitud"
+    val clipboardManager = LocalClipboardManager.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val fusedLocationClient = remember { LocationServices.getFusedLocationProviderClient(context) }
+    
+    var estadoPermiso by remember { mutableStateOf("Verificando...") }
+    var ubicacionActual by remember { mutableStateOf("Coordenadas no obtenidas") }
+
+    // Función para actualizar el estado del permiso
+    fun actualizarEstado() {
+        val fine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION)
+        val coarse = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION)
+        
+        estadoPermiso = if (fine == PackageManager.PERMISSION_GRANTED || coarse == PackageManager.PERMISSION_GRANTED) {
+            "Permiso concedido"
+        } else {
+            "Permiso pendiente de solicitud"
+        }
+    }
+
+    // Observador para detectar cuando el usuario vuelve a la app (por si cambió ajustes)
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                actualizarEstado()
             }
-        )
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
     }
 
     val launcher = rememberLauncherForActivityResult(
@@ -328,20 +352,20 @@ fun PermisoUbicacionScreen(navController: NavHostController) {
     ) { permissions ->
         val concedido = permissions.getOrDefault(Manifest.permission.ACCESS_FINE_LOCATION, false) ||
                         permissions.getOrDefault(Manifest.permission.ACCESS_COARSE_LOCATION, false)
-        estadoPermiso = if (concedido) {
-            "Permiso concedido"
-        } else {
-            "Permiso denegado"
-        }
+        estadoPermiso = if (concedido) "Permiso concedido" else "Permiso denegado"
     }
 
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
-                title = { Text("PERMISO DE UBICACIÓN", style = MaterialTheme.typography.headlineSmall) },
+                title = { Text("GESTIÓN DE UBICACIÓN GPS", style = MaterialTheme.typography.headlineMedium) },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Regresar")
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack, 
+                            contentDescription = "Regresar",
+                            modifier = Modifier.size(36.dp)
+                        )
                     }
                 }
             )
@@ -351,25 +375,67 @@ fun PermisoUbicacionScreen(navController: NavHostController) {
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
+                .verticalScroll(rememberScrollState())
                 .padding(24.dp),
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
-                text = "Estado del Permiso:",
-                style = MaterialTheme.typography.headlineSmall
+                text = "ESTADO ACTUAL:",
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center
             )
             Text(
                 text = estadoPermiso,
-                style = MaterialTheme.typography.displaySmall,
+                style = MaterialTheme.typography.displayMedium,
                 textAlign = TextAlign.Center,
                 color = when (estadoPermiso) {
-                    "Permiso concedido" -> MaterialTheme.colorScheme.primary
+                    "Permiso concedido" -> Color(0xFF2E7D32) // Verde oscuro
                     "Permiso denegado" -> MaterialTheme.colorScheme.error
-                    else -> MaterialTheme.colorScheme.onSurfaceVariant
+                    else -> MaterialTheme.colorScheme.primary
                 },
-                modifier = Modifier.padding(vertical = 32.dp)
+                modifier = Modifier.padding(vertical = 24.dp)
             )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Text(
+                text = "UBICACIÓN GPS REAL:",
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center
+            )
+            
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center,
+                modifier = Modifier.fillMaxWidth().padding(vertical = 20.dp)
+            ) {
+                Text(
+                    text = ubicacionActual,
+                    style = MaterialTheme.typography.displaySmall,
+                    textAlign = TextAlign.Center,
+                    color = MaterialTheme.colorScheme.secondary,
+                    modifier = Modifier.weight(1f, fill = false)
+                )
+                if (ubicacionActual.startsWith("Lat:")) {
+                    IconButton(
+                        onClick = { 
+                            clipboardManager.setText(AnnotatedString(ubicacionActual))
+                        },
+                        modifier = Modifier.padding(start = 8.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.ContentCopy, 
+                            contentDescription = "Copiar coordenadas",
+                            modifier = Modifier.size(36.dp)
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(40.dp))
 
             Button(
                 onClick = {
@@ -382,20 +448,41 @@ fun PermisoUbicacionScreen(navController: NavHostController) {
                 },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(90.dp)
+                    .height(100.dp)
             ) {
-                Text("Solicitar Permiso de Ubicación", style = MaterialTheme.typography.titleLarge)
+                Text("SOLICITAR PERMISOS", style = MaterialTheme.typography.headlineSmall)
             }
 
-            Spacer(modifier = Modifier.height(32.dp))
+            Spacer(modifier = Modifier.height(20.dp))
 
             Button(
-                onClick = { navController.popBackStack() },
+                onClick = {
+                    if (estadoPermiso == "Permiso concedido") {
+                        try {
+                            fusedLocationClient.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, null)
+                                .addOnSuccessListener { location ->
+                                    if (location != null) {
+                                        ubicacionActual = "Lat: ${String.format(Locale.US, "%.6f", location.latitude)}\nLong: ${String.format(Locale.US, "%.6f", location.longitude)}"
+                                    } else {
+                                        ubicacionActual = "GPS apagado o sin señal.\nActive el GPS del equipo."
+                                    }
+                                }
+                                .addOnFailureListener {
+                                    ubicacionActual = "Error al obtener GPS"
+                                }
+                        } catch (_: SecurityException) {
+                            ubicacionActual = "Error de seguridad"
+                        }
+                    } else {
+                        ubicacionActual = "Primero debe otorgar permisos"
+                    }
+                },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(80.dp)
+                    .height(100.dp),
+                enabled = estadoPermiso == "Permiso concedido"
             ) {
-                Text("Regresar al Menú", style = MaterialTheme.typography.titleLarge)
+                Text("OBTENER UBICACIÓN", style = MaterialTheme.typography.headlineSmall)
             }
         }
     }
@@ -415,7 +502,7 @@ fun PantallaDestino(titulo: String, navController: NavHostController) {
                 },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Regresar")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Regresar")
                     }
                 }
             )
@@ -434,14 +521,6 @@ fun PantallaDestino(titulo: String, navController: NavHostController) {
                 style = MaterialTheme.typography.headlineSmall,
                 modifier = Modifier.padding(bottom = 32.dp)
             )
-            Button(
-                onClick = { navController.popBackStack() },
-                modifier = Modifier
-                    .fillMaxWidth(0.8f)
-                    .height(64.dp)
-            ) {
-                Text("Regresar al Menú", style = MaterialTheme.typography.titleLarge)
-            }
         }
     }
 }
